@@ -12,41 +12,34 @@
 void handle_client(int client_socket) {
     char buffer[BUFFER_SIZE];
     recv(client_socket, buffer, BUFFER_SIZE, 0);
-
-    if (strstr(buffer, "GET /index.php")) {
-        FILE *php_output = popen("php index.php", "r");
-        if (php_output == NULL) {
-            perror("Failed to run PHP script");
-            closesocket(client_socket);
-            return;
-        }
-
-        char php_response[BUFFER_SIZE];
-        fread(php_response, sizeof(char), BUFFER_SIZE, php_output);
-        pclose(php_output);
-
-        char response[BUFFER_SIZE];
-        snprintf(response, BUFFER_SIZE,
-                 "HTTP/1.1 200 OK\r\n"
-                 "Content-Type: text/html\r\n"
-                 "Content-Length: %ld\r\n\r\n"
-                 "%s",
-                 strlen(php_response), php_response);
-
-        send(client_socket, response, strlen(response), 0);
-    } else {
-        const char *html_content =
-            "<html><body><h1>404 Not Found</h1><p>File not found.</p></body></html>";
-        char response[BUFFER_SIZE];
-        snprintf(response, BUFFER_SIZE,
-                 "HTTP/1.1 404 Not Found\r\n"
-                 "Content-Type: text/html\r\n"
-                 "Content-Length: %ld\r\n\r\n"
-                 "%s",
-                 strlen(html_content), html_content);
-
-        send(client_socket, response, strlen(response), 0);
+    printf("Received request:\n%s\n", buffer);
+    
+    FILE *php_output = popen("php index.php", "r");
+    if (php_output == NULL) {
+        perror("Failed to run PHP script");
+        closesocket(client_socket);
+        return;
     }
+
+    char php_content[BUFFER_SIZE];
+    size_t content_length = fread(php_content, 1, BUFFER_SIZE - 1, php_output);
+    php_content[content_length] = '\0'; // Null-terminate the string
+    pclose(php_output);
+
+    char php_response[BUFFER_SIZE];
+    fread(php_response, sizeof(char), BUFFER_SIZE, php_output);
+    pclose(php_output);
+
+    char response[BUFFER_SIZE];
+    snprintf(response, BUFFER_SIZE,
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/html\r\n"
+                "Content-Length: %ld\r\n\r\n"
+                "%s",
+                strlen(php_response), php_response);
+    strcat(response, php_content);
+
+    send(client_socket, response, strlen(response), 0);
 
     closesocket(client_socket);
 }
